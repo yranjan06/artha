@@ -1,0 +1,21 @@
+# environment
+.env
+
+# python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# virtual environment
+venv/
+
+# memory files — user data
+memory/
+!memory/.gitkeep
+
+# test files
+test_format.py
+
+# gradio temp
+gradio/
+EOF
