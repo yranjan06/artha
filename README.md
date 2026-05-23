@@ -1,10 +1,138 @@
 # Artha
 
-A voice first personal finance agent with persistent memory across sessions.
+Your voice-first finance bro that actually remembers stuff.
 
-Speak in Hindi or English — Artha understands your intent, calls the right financial tools, and remembers your goals and commitments the next time you talk.
+Chat in Hindi or English. Artha gets what you mean, hits up the right finance tools, and keeps your goals and promises in mind for next time.
 
-Built from scratch. Constrain for this task : no LangChain, no LlamaIndex, no agent frameworks used.
+Built from the ground up. The challenge? No LangChain, no LlamaIndex, no safety nets. Just raw code.
+
+---
+
+## Demo
+
+(demo vid coming soon, promise)
+
+---
+
+## Architecture
+
+(arch diagram also coming soon, lol)
+
+---
+
+## Key Design Decisions
+
+**No frameworks, just vibes.** The agent loop, memory, intent classifier, and tool dispatch? All coded from scratch. Frameworks like LangChain are cool, but they hide the magic. Building it raw means we know exactly what's going on, making it easier to fix and understand.
+
+**Let Python do the math, let the LLM do the thinking.** Calculating your budget, summing up transactions, all that number crunching is pure Python. The LLM only steps in for the big brain questions: "Should I really buy this?", "Does this mess with my goals?", "What's the key takeaway from our chat?".
+
+**Memory for the constants, tools for the variables.** Your goals, promises, and habits? They're saved in `memory/{user_id}.json`. Your bank balance and transaction history? Never stored. We fetch that fresh every time. Nobody wants a finance agent giving them stale numbers. That's a trust-killer.
+
+**Grows with you.** No filling out boring forms. First time you chat, Artha just asks for your name and income. After that, it remembers you. Adding more users is as simple as changing a single line of code.
+
+---
+
+## The Voice Tech
+
+```
+Groq Whisper  -> for speech-to-text (STT)
+Groq Llama 3.3 -> for the brains and tool use
+Sarvam Bulbul v3 -> for text-to-speech (TTS) with a natural Indian voice
+```
+
+One Groq API key handles both STT and the LLM. Sarvam gives the output that smooth Indian accent.
+
+---
+
+## Get it Running
+
+```bash
+git clone https://github.com/yourusername/artha.git
+cd artha
+
+# Set up a virtual environment
+python -m venv venv
+source venv/bin/activate
+
+# Install the goods
+pip install -r requirements.txt
+
+# Make your own .env file
+# You'll need to add your GROQ_API_KEY and SARVAM_API_KEY
+```
+
+---
+
+## How to Use
+
+```bash
+python app.py
+# Then open up http://localhost:7860 in your browser
+```
+
+Hit **Call** to start talking. Artha will talk back.
+When you're done, click **End Call** to save your session.
+
+---
+
+## What's Inside
+
+```
+artha/
+├── app.py              # The Gradio UI, where the voice magic starts
+├── agent.py            # The main agent loop, tool handling, and system prompts
+├── intent.py           # A 2-layer system to figure out if you're talking finance or just chatting
+├── memory.py           # Handles loading and saving your profile so it's persistent
+├── ledger.py           # A log of all your transactions, just for you
+├── onboarding.py       # The part that gets your info the first time
+├── stt.py              # Groq Whisper for turning your speech into text
+├── tts.py              # Sarvam Bulbul v3 for turning text into speech
+├── llm.py              # A wrapper for the Groq SDK with some retry smarts
+├── config.py           # Shared Groq client setup
+├── tools/
+│   ├── finance.py      # Tools for logging expenses, checking your budget, setting reminders, etc.
+│   └── search.py       # DuckDuckGo for looking up financial info
+├── utils/
+│   └── audio.py        # Tools for handling audio, like resampling and converting to mono
+├── memory/             # This folder gets created automatically for user data (and is gitignored)
+├── .env.example
+└── requirements.txt
+```
+
+---
+
+## A Tale of Two Sessions
+
+**Session 1:**
+- You tell Artha your name and how much you make. It saves this to your profile.
+- You log some expenses. They go into your personal ledger.
+- You ask about your budget. Artha calculates it using Python, not the LLM.
+- You end the session. Artha figures out your goals and patterns and saves them.
+
+**Session 2 (another day):**
+- Artha loads up your profile. It already knows your name, income, and goals.
+- You ask if you should buy something. Artha checks your budget against your current spending.
+- It even remembers the promises you made in Session 1 without you having to repeat yourself.
+
+---
+
+## The Inspo
+
+This project is a mashup of two of my earlier builds:
+- **Finno**: A finance agent with memory, built with Groq and a raw agent loop.
+- **Voice Assistant**: A voice-powered assistant with a 3-layer intent system and a Groq Whisper pipeline.
+
+Artha takes the best of both and turns them into a real product with voice I/O, a user model, and a transaction ledger.
+
+---
+
+## What's Next
+
+- Move to FastAPI + WebSockets for a real-time, continuous conversation.
+- Add chunked summarization for super long chats.
+- Build a proper multi-user authentication system.
+- Integrate with bank APIs like Setu or Plaid.
+
 
 ---
 
