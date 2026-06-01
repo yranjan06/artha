@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Artha — Voice Finance</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+  width:100%;height:100vh;
+  background:#080808;
+  font-family:"Courier New",monospace;
+  color:#f0f0ee;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  overflow:hidden;user-select:none;
+}
+
+/* nav */
+nav{
+  position:fixed;top:0;width:100%;height:56px;
+  border-bottom:1px solid #1a1a1a;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 32px;z-index:10;
+}
+.logo{font-size:18px;font-weight:700;letter-spacing:.14em}
+.logo em{color:#cc2200;font-style:normal}
+#pill{
+  font-size:9px;padding:4px 14px;border-radius:20px;
+  background:#160500;color:#cc2200;border:1px solid #3a0d00;
+  letter-spacing:.12em;text-transform:uppercase;
+  transition:background .3s,color .3s,border-color .3s;
+}
+#pill.live{background:#050f05;color:#00dd55;border-color:#1a4a1a}
+
+/* canvas + subtitle */
+#c{
+  cursor:pointer;display:block;
+  transition:opacity .4s;
+}
+#c:hover{opacity:.9}
+#sub{
+  font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+  color:#2a0800;margin-top:14px;text-align:center;
+  transition:color .3s;min-height:16px;
+}
+#sub.on{color:#cc2200}
+
+/* transcript */
+.tx{
+  margin-top:28px;width:480px;max-width:88vw;
+  text-align:center;min-height:72px;
+  display:flex;flex-direction:column;gap:6px;
+}
+#utxt{
+  font-size:11px;color:#444;font-style:italic;
+  opacity:0;transition:opacity .3s;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#atxt{
+  font-size:14px;color:#f0d8c8;line-height:1.7;
+  opacity:0;transition:opacity .5s;
+}
+.show{opacity:1!important}
+
+/* end call */
+#endbtn{
+  display:none;margin-top:20px;
+  background:#0f0303;color:#cc2200;
+  border:1px solid #3a0d00;border-radius:6px;
+  padding:10px 36px;
+  font-family:"Courier New",monospace;
+  font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+  cursor:pointer;transition:all .2s;
+}
+#endbtn:hover{background:#1a0505;border-color:#cc2200;box-shadow:0 0 16px rgba(204,34,0,.15)}
+#endbtn.show{display:block}
+
+/* bottom stats */
+.stats{
+  position:fixed;bottom:0;width:100%;
+  border-top:1px solid #1a1a1a;
+  display:grid;grid-template-columns:1fr 1fr 1fr;
+  height:52px;
+}
+.stat{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  border-right:1px solid #1a1a1a;
+}
+.stat:last-child{border-right:none}
+.sn{font-size:16px;font-weight:700;color:#cc2200;letter-spacing:-.01em}
+.sl{font-size:7px;color:#2a2a28;letter-spacing:.14em;text-transform:uppercase;margin-top:2px}
+
+/* error toast */
+#toast{
+  position:fixed;bottom:70px;left:50%;transform:translateX(-50%);
+  background:#1a0505;color:#cc2200;border:1px solid #3a0d00;
+  border-radius:6px;padding:8px 20px;font-size:11px;letter-spacing:.08em;
+  opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;
+}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">AR<em>TH</em>A</div>
+  <span id="pill">ready</span>
+</nav>
+
+<canvas id="c" width="300" height="300"></canvas>
+<div id="sub">tap to begin</div>
+
+<div class="tx">
+  <div id="utxt"></div>
+  <div id="atxt"></div>
+</div>
+
+<button id="endbtn" onclick="endCall()">end call</button>
+
+<div class="stats">
+  <div class="stat"><div class="sn">RAW</div><div class="sl">no frameworks</div></div>
+  <div class="stat"><div class="sn">7</div><div class="sl">finance tools</div></div>
+  <div class="stat"><div class="sn">∞</div><div class="sl">session memory</div></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── canvas orb ─────────────────────────────────────────────
+const cv  = document.getElementById("c");
+const ctx = cv.getContext("2d");
+const R   = "#cc2200";
+const W   = 300, CX = W/2, CY = W/2;
+
+const FONT = {
+  A:[[0,0,1,0,0],[0,1,0,1,0],[1,0,0,0,1],[1,1,1,1,1],[1,0,0,0,1],[1,0,0,0,1]],
+  R:[[1,1,1,0,0],[1,0,0,1,0],[1,1,1,0,0],[1,0,1,0,0],[1,0,0,1,0],[1,0,0,0,1]],
+  T:[[1,1,1,1,1],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0],[0,0,1,0,0]],
+  H:[[1,0,0,0,1],[1,0,0,0,1],[1,1,1,1,1],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1]]
+};
+const WORD = "ARTHA".split("");
+const ST = 7, GW = 5*ST, GAP = 6;
+const TW  = WORD.length*GW + (WORD.length-1)*GAP;
+const TH  = 6*ST;
+const TX  = CX - TW/2;
+const TY  = CY - TH/2;
+const RINGS = [
+  {r:110, n:44, s:1.5},
+  {r:88,  n:34, s:2},
+  {r:66,  n:24, s:2.6},
+  {r:44,  n:14, s:3.2}
+];
+
+let orbState = "idle", frame = 0;
+
+function drawOrb() {
+  ctx.clearRect(0, 0, W, W);
+  ctx.fillStyle = "#080808";
+  ctx.fillRect(0, 0, W, W);
+
+  // outer glow
+  const g = ctx.createRadialGradient(CX, CY, 30, CX, CY, 130);
+  const ga = orbState === "idle"
+    ? 0.06
+    : 0.14 + 0.06 * Math.sin(frame * 0.07);
+  g.addColorStop(0, "rgba(204,34,0,0)");
+  g.addColorStop(.5, `rgba(204,34,0,${ga})`);
+  g.addColorStop(1, "rgba(204,34,0,0)");
+  ctx.beginPath(); ctx.arc(CX, CY, 130, 0, Math.PI*2);
+  ctx.fillStyle = g; ctx.fill();
+
+  // ring dots
+  RINGS.forEach((ring, ri) => {
+    for (let i = 0; i < ring.n; i++) {
+      const a  = (i / ring.n) * Math.PI * 2;
+      const px = CX + Math.cos(a) * ring.r;
+      const py = CY + Math.sin(a) * ring.r;
+      let al = 0.08 + 0.03 * Math.sin(frame * 0.02 + ri * 0.8);
+
+      if (orbState === "listening") {
+        const w = Math.sin(frame * 0.15 - ri * 1.4 - i * 0.2);
+        al = 0.08 + 0.5 * Math.max(0, w);
+      } else if (orbState === "thinking") {
+        const sw = (frame * 0.05) % (Math.PI * 2);
+        const da = ((a - sw) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+        al = 0.08 + (da < 1.1 ? 0.45 * (1 - da / 1.1) : 0);
+      } else if (orbState === "speaking") {
+        const p = Math.sin(frame * 0.12 + ri * 0.9);
+        al = 0.08 + 0.38 * Math.max(0, p);
+      }
+
+      ctx.globalAlpha = Math.min(1, al);
+      ctx.beginPath();
+      ctx.arc(px, py, ring.s, 0, Math.PI*2);
+      ctx.fillStyle = R;
+      ctx.fill();
+    }
+  });
+  ctx.globalAlpha = 1;
+
+  // center glow fill
+  const cg = ctx.createRadialGradient(CX, CY, 0, CX, CY, 32);
+  cg.addColorStop(0, "#1c0600");
+  cg.addColorStop(1, "rgba(8,3,0,0)");
+  ctx.beginPath(); ctx.arc(CX, CY, 32, 0, Math.PI*2);
+  ctx.fillStyle = cg; ctx.fill();
+
+  // ARTHA letter dots
+  const la = orbState === "idle"
+    ? 0.55
+    : 0.85 + 0.12 * Math.sin(frame * 0.06);
+  WORD.forEach((ch, ci) => {
+    const rows = FONT[ch] || FONT.A;
+    const cx2  = TX + ci * (GW + GAP);
+    rows.forEach((row, ry) => {
+      row.forEach((px, rx) => {
+        if (!px) return;
+        const x = cx2 + rx*ST + ST/2;
+        const y = TY  + ry*ST + ST/2;
+        ctx.globalAlpha = la;
+        ctx.beginPath();
+        ctx.arc(x, y, ST * 0.4, 0, Math.PI*2);
+        ctx.fillStyle = R;
+        ctx.fill();
+      });
+    });
+  });
+  ctx.globalAlpha = 1;
+  frame++;
+  requestAnimationFrame(drawOrb);
+}
+drawOrb();
+
+// ── ui state ────────────────────────────────────────────────
+const pill   = document.getElementById("pill");
+const sub    = document.getElementById("sub");
+const utxt   = document.getElementById("utxt");
+const atxt   = document.getElementById("atxt");
+const endbtn = document.getElementById("endbtn");
+const toast  = document.getElementById("toast");
+
+let toastTimer = null;
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), 3500);
+}
+
+const LABELS = {
+  idle:      { sub: "tap to begin",   pill: "ready",      live: false },
+  connecting:{ sub: "connecting...",  pill: "connecting", live: false },
+  listening: { sub: "listening...",   pill: "live",       live: true  },
+  thinking:  { sub: "thinking...",    pill: "processing", live: false },
+  speaking:  { sub: "speaking...",    pill: "responding", live: false },
+  saving:    { sub: "saving memory…", pill: "saving",     live: false },
+};
+
+function setState(s) {
+  orbState = s;
+  const l = LABELS[s] || LABELS.idle;
+  sub.textContent    = l.sub;
+  sub.className      = s !== "idle" ? "on" : "";
+  pill.textContent   = l.pill;
+  pill.className     = l.live ? "live" : "";
+}
+
+function showUser(text) {
+  utxt.textContent = `"${text}"`;
+  utxt.classList.add("show");
+  atxt.classList.remove("show");
+}
+function showAgent(text) {
+  atxt.textContent = text;
+  atxt.classList.add("show");
+}
+function clearTx() {
+  utxt.classList.remove("show");
+  atxt.classList.remove("show");
+}
+
+// ── audio playback ──────────────────────────────────────────
+async function playB64(b64) {
+  return new Promise((resolve) => {
+    try {
+      const raw = atob(b64);
+      const buf = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
+      const blob = new Blob([buf], { type: "audio/wav" });
+      const url  = URL.createObjectURL(blob);
+      const aud  = new Audio(url);
+      aud.onended = () => { URL.revokeObjectURL(url); resolve(); };
+      aud.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+      aud.play().catch(resolve);
+    } catch (e) { resolve(); }
+  });
+}
+
+// ── mic + silence detection ─────────────────────────────────
+let mediaRecorder = null;
+let audioChunks   = [];
+let micStream     = null;
+let audioCtx      = null;
+let analyser      = null;
+let hasSpoken     = false;
+let silenceStart  = null;
+let silenceRaf    = null;
+let inCall        = false;
+let isSpeaking    = false;
+
+function bestMime() {
+  const types = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/mp4",
+  ];
+  for (const t of types) if (MediaRecorder.isTypeSupported(t)) return t;
+  return "";
+}
+
+async function startListening() {
+  if (!inCall) return;
+  audioChunks  = [];
+  hasSpoken    = false;
+  silenceStart = null;
+
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+  } catch (e) {
+    showToast("Microphone access denied — allow mic and reload.");
+    setState("idle");
+    return;
+  }
+
+  audioCtx = new AudioContext();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 512;
+  const src = audioCtx.createMediaStreamSource(micStream);
+  src.connect(analyser);
+
+  const mime = bestMime();
+  mediaRecorder = new MediaRecorder(micStream, mime ? { mimeType: mime } : {});
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data.size > 0) audioChunks.push(e.data);
+  };
+  mediaRecorder.onstop = sendAudio;
+  mediaRecorder.start(250); // 250ms chunks
+
+  setState("listening");
+  detectSilence();
+}
+
+function detectSilence() {
+  if (!inCall || !analyser) return;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(data);
+  const avg = data.reduce((a, b) => a + b, 0) / data.length;
+
+  if (avg > 18) {
+    hasSpoken    = true;
+    silenceStart = null;
+  } else if (hasSpoken) {
+    if (!silenceStart) silenceStart = Date.now();
+    if (Date.now() - silenceStart > 1400) {
+      stopAndSend();
+      return;
+    }
+  }
+  silenceRaf = requestAnimationFrame(detectSilence);
+}
+
+function stopAndSend() {
+  cancelAnimationFrame(silenceRaf);
+  if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+  micStream?.getTracks().forEach(t => t.stop());
+  audioCtx?.close().catch(() => {});
+  audioCtx = null;
+  analyser = null;
+  setState("thinking");
+}
+
+function sendAudio() {
+  if (!audioChunks.length || !ws) return;
+  const mime = bestMime() || "audio/webm";
+  const blob = new Blob(audioChunks, { type: mime });
+  const reader = new FileReader();
+  reader.onload = () => {
+    const b64 = reader.result.split(",")[1];
+    ws.send(JSON.stringify({ type: "audio", data: b64, mime }));
+  };
+  reader.readAsDataURL(blob);
+}
+
+// ── websocket ───────────────────────────────────────────────
+let ws = null;
+
+// click orb: start if idle, end if in call
+cv.addEventListener("click", () => {
+  if (!inCall) startCall();
+  else if (!isSpeaking) endCall();
+});
+
+async function startCall() {
+  inCall = true;
+  isSpeaking = false;
+  endbtn.classList.add("show");
+  clearTx();
+  setState("connecting");
+
+  ws = new WebSocket(`ws://${location.host}/ws/default`);
+
+  ws.onopen = () => {
+    // waiting for welcome audio from server
+    setState("thinking");
+  };
+
+  ws.onmessage = async (e) => {
+    const msg = JSON.parse(e.data);
+
+    if (msg.type === "audio") {
+      isSpeaking = true;
+      setState("speaking");
+      if (msg.text) showAgent(msg.text);
+      await playB64(msg.data);
+      isSpeaking = false;
+      if (inCall) {
+        clearTx();
+        startListening();
+      }
+    }
+    else if (msg.type === "text_only") {
+      // TTS failed — show text, resume listening
+      showAgent(msg.text);
+      if (inCall) startListening();
+    }
+    else if (msg.type === "transcript") {
+      showUser(msg.text);
+    }
+    else if (msg.type === "status") {
+      setState(msg.state);
+    }
+    else if (msg.type === "session_ended") {
+      inCall = false;
+      endbtn.classList.remove("show");
+      setState("idle");
+      showAgent("Session saved. Kal milte hain. 🙏");
+    }
+    else if (msg.type === "error") {
+      showToast(msg.text || "Error — try again.");
+      if (inCall) startListening();
+    }
+  };
+
+  ws.onclose = () => {
+    if (inCall) {
+      inCall = false;
+      endbtn.classList.remove("show");
+      setState("idle");
+    }
+  };
+
+  ws.onerror = () => {
+    inCall = false;
+    endbtn.classList.remove("show");
+    setState("idle");
+    showToast("Connection failed — is the server running?");
+  };
+}
+
+async function endCall() {
+  if (!ws) return;
+  inCall = false;
+
+  cancelAnimationFrame(silenceRaf);
+  if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+  micStream?.getTracks().forEach(t => t.stop());
+  audioCtx?.close().catch(() => {});
+
+  setState("saving");
+  try {
+    ws.send(JSON.stringify({ type: "end_session" }));
+  } catch (e) {
+    // ws already closed
+    setState("idle");
+    endbtn.classList.remove("show");
+  }
+}
+</script>
+</body>
+</html>

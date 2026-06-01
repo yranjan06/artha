@@ -1,4 +1,3 @@
-# tools/finance.py
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -47,60 +46,70 @@ def log_expense(user_id, amount, category, note=""):
     add_transaction(user_id, -abs(amount), category, note)
     return {
         "status": "ok",
-        "message": f"{abs(amount)} logged under {category}"
+        "message": f"{abs(amount)} logged under {category}",
     }
 
 
 def get_monthly_summary(user_id, year, month):
     """
-    Monthly finance summary — math in code, no LLM.
+    Monthly finance summary — math in code, not LLM.
     """
     txs = get_monthly_expenses(user_id, year, month)
-    total_income = 0
+    total_income  = 0
     total_expense = 0
-    by_category = {}
+    by_category   = {}
 
     for tx in txs:
-        amount = tx["amount"]
+        amount   = tx["amount"]
         category = tx["category"]
         if amount > 0:
             total_income += amount
         else:
             total_expense += abs(amount)
-        by_category[category] = (
-            by_category.get(category, 0) + abs(amount)
-        )
+        by_category[category] = by_category.get(category, 0) + abs(amount)
 
     return {
-        "total_income": total_income,
+        "total_income":  total_income,
         "total_expense": total_expense,
-        "balance": total_income - total_expense,
-        "by_category": by_category,
+        "balance":       total_income - total_expense,
+        "by_category":   by_category,
     }
 
 
 def check_budget(user_id, amount, memory):
     """
     Check if user can afford a purchase this month.
-    Income parsed from memory.user_profile.
+    Returns explicit error if income is not set — never silently returns 'can't afford'.
     """
-    today = date.today()
+    monthly_income_raw = memory.user_profile.get("monthly_income")
+
+    if not monthly_income_raw:
+        return {
+            "error":   "income_not_set",
+            "message": "Pehle apni monthly income batao — tab budget check kar sakte hain.",
+        }
+
+    income = parse_income(monthly_income_raw)
+    if income <= 0:
+        return {
+            "error":   "income_invalid",
+            "message": "Monthly income valid number mein batao (e.g. 50000 or 50k).",
+        }
+
+    today    = date.today()
     expenses = get_monthly_expenses(user_id, today.year, today.month)
 
     total_expense = sum(
         abs(tx["amount"]) for tx in expenses if tx["amount"] < 0
     )
-
-    income = parse_income(
-        memory.user_profile.get("monthly_income", 0)
-    )
-
     remaining = max(income - total_expense, 0)
 
     return {
         "can_afford": remaining >= amount,
-        "remaining": remaining,
-        "requested": amount,
+        "remaining":  remaining,
+        "requested":  amount,
+        "income":     income,
+        "spent_so_far": total_expense,
     }
 
 
@@ -110,9 +119,9 @@ def set_reminder(memory, title, due_date):
     Returns updated memory.
     """
     memory.commitments.append({
-        "title": title,
+        "title":    title,
         "due_date": due_date,
-        "status": "pending",
+        "status":   "pending",
     })
     return memory
 
@@ -121,20 +130,18 @@ def make_plan(income, expenses_list):
     """
     Simple savings estimate from income and expense list.
     """
-    income = parse_income(income)
+    income        = parse_income(income)
     total_expense = sum(
         abs(tx["amount"]) for tx in expenses_list if tx["amount"] < 0
     )
     possible_savings = max(income - total_expense, 0)
-    savings_rate = (
-        round((possible_savings / income) * 100, 1) if income > 0 else 0
-    )
+    savings_rate     = round((possible_savings / income) * 100, 1) if income > 0 else 0
 
     return {
-        "income": income,
-        "expenses": total_expense,
-        "possible_savings": possible_savings,
-        "savings_rate": savings_rate,
+        "income":            income,
+        "expenses":          total_expense,
+        "possible_savings":  possible_savings,
+        "savings_rate":      savings_rate,
     }
 
 
@@ -151,8 +158,6 @@ if __name__ == "__main__":
         {"amount": -5000, "category": "sabzi"},
         {"amount": -2000, "category": "petrol"},
     ])
-    print(f"make_plan: {plan}")
     assert plan["possible_savings"] == 73000.0
     print("make_plan: pass")
-
     print("tools/finance.py working correctly.")
